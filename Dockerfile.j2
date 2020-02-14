@@ -1,0 +1,81 @@
+# Start with JDK8
+FROM openjdk:8
+
+ENV PGS_APP=android-test \
+    APP_MODULE=main:app
+
+# Init dependencies for the setup process
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y \
+        build-essential \
+        expect \
+        software-properties-common \
+        unzip \
+        wget \
+        python-requests \
+        patch \
+        zlib1g-dev \
+        liblzma-dev \
+        pkg-config \
+    # Install 32-bit compatibility for 64-bit environments
+        libc6:i386 \
+        libncurses5:i386 \
+        libstdc++6:i386 \
+        zlib1g:i386 \
+        ruby-full \
+        ruby-dev \
+    # Cleanup
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Install bundler
+RUN gem install bundler
+
+# Set desired Android Linux SDK version
+# ENV ANDROID_SDK_VERSION 25.2.3
+# ENV ANDROID_SDK_ZIP tools_r${ANDROID_SDK_VERSION}-linux.zip
+ENV ANDROID_SDK_ZIP sdk-tools-darwin-3859397.zip
+ENV ANDROID_SDK_ZIP_URL https://dl.google.com/android/repository/${ANDROID_SDK_ZIP}
+ENV ANDROID_HOME /opt/android-sdk-linux
+
+ENV PATH ${PATH}:${ANDROID_HOME}/tools
+
+# Install Android SDK
+RUN mkdir -p ${ANDROID_HOME}
+
+RUN cd ${ANDROID_HOME} \
+  && wget --quiet ${ANDROID_SDK_ZIP_URL} \
+  && unzip -q ${ANDROID_HOME}/${ANDROID_SDK_ZIP} -d ${ANDROID_HOME} \
+  && rm ${ANDROID_HOME}/${ANDROID_SDK_ZIP}
+
+RUN mkdir -p ${HOME}/.android
+RUN touch ${HOME}/.android/repositories.cfg
+
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager --licenses
+
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager "build-tools;28.0.3"
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager "platform-tools"
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager "platforms;android-28"
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager "extras;m2repository;com;android;support;constraint;constraint-layout;1.0.2"
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager "extras;m2repository;com;android;support;constraint;constraint-layout-solver;1.0.2"
+
+# Make SDK dir writable
+RUN chmod -R a+w ${ANDROID_HOME}
+
+# Add a "Home" directory for the user
+ENV GRADLE_USER_HOME /gradle_home
+
+RUN mkdir -p ${GRADLE_USER_HOME}
+
+# ENV DUMMY_LOCAL_PROPERTIES local.properties.dummy
+ENV DOCKER_GRADLE_HOME container-test-home
+# create dummy local.properties to keep host environment's configs from overriding the Dockerfile ENV for android sdk bits
+# RUN touch ${DUMMY_LOCAL_PROPERTIES}
+
+# create a directory to mount as the container's GRADLE_USER_HOME to share the gradle cache from run to run
+RUN mkdir -p ${DOCKER_GRADLE_HOME}
+
+# Copy source files & install gradle
+RUN mkdir build
+COPY . ./build
