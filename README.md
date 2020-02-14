@@ -6,6 +6,6 @@ See the main repo for the latest README (https://github.com/requery/sqlite-andro
 
 See https://github.com/requery/sqlite-android/pull/125 PR for some background info. This forks bumps the maximum # of host parameters in a Single SQL statement to 32768 (up from the default 999).
 
-# Deployment
+# Deployment (WIP, Working with devops to figure out why deployment job is failing [February 14, 2020])
 
 Run https://jenkins.planfront.net/job/Custom-Deploy-Tasks/job/DEPLOY-Android-SQLite-Requery-Fork/ to deploy a new version of the artifact.
