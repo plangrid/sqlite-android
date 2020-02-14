@@ -1,0 +1,63 @@
+#!groovy
+
+// This file is named DeployJenkins file, so that it won't get picked up by the main PlanGrid Jenkins project
+
+/**
+ * Devtools team created PlangridStage groovy function uses env.GIT_BRANCH and env.PROJECT_NAME
+ * Need to set these variables prior to use PlangridStage
+ * (https://github.com/plangrid/plangrid-build-tools/blob/dev/vars/PlangridStage.groovy)
+ */
+env.GIT_BRANCH = env.BRANCH_NAME
+env.PROJECT_NAME = 'sqlite-android'
+
+def deploy_project = env.DEPLOY_PROJECT
+
+
+throttle(['BigMem']) {
+    node() {
+
+        deploy_build_dir = 'build'
+
+        stage("SCM") {
+            checkout scm
+
+            sh("git checkout origin/${DEPLOY_BRANCH}")
+            sh("git clean -fdx")
+
+            env.GIT_COMMIT = sh(returnStdout: true, script: "git rev-parse HEAD").trim()
+
+            if (!env.DOCKER_IMAGE_BASE) {
+                env.DOCKER_IMAGE_BASE = "${env.PROJECT_NAME}:${env.GIT_COMMIT}"
+            }
+        }
+
+        stage('Build Docker') {
+            retry(2) {
+                sh '/opt/plangrid/build-tools/bin/build-docker'
+            }
+            CURRENT_DIR = sh(returnStdout: true, script: "pwd").trim()
+
+            DOCKER_ID = sh(returnStdout: true, script: "docker run \
+                -e BRANCH_NAME=${env.BRANCH_NAME} \
+                -e BUILD_NUMBER=${env.BUILD_NUMBER} \
+                -e JENKINS_URL=${env.JENKINS_URL} \
+                -e CHANGE_URL=${env.CHANGE_URL} \
+                -e CHANGE_ID=${env.CHANGE_ID} \
+                -e ARTIFACTORY_USER \
+                -e ARTIFACTORY_PASSWORD \
+                -itd \
+                -v /var/lib/jenkins/gradlecache:/gradle_home/caches/ \
+                -v " + "${CURRENT_DIR}:/build " + "${env.PROJECT_NAME}:${env.GIT_COMMIT}").trim()
+        }
+
+        stage('Clean') {
+            sh("docker exec ${DOCKER_ID} bash -c 'find \${GRADLE_USER_HOME}/caches -type f -name \"*.lock\" | xargs -I {} rm \"{}\"'")
+        }
+        stage("Build") {
+            sh("docker exec ${DOCKER_ID} bash -c 'cd ${deploy_build_dir} ; ./gradlew assembleRelease'")
+        }
+        stage("Deploy") {
+            sh("docker exec ${DOCKER_ID} bash -c 'cd ${deploy_build_dir} ; ./gradlew ${deploy_project}:uploadArchives'")
+        }
+    }
+}
