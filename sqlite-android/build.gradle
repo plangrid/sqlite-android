@@ -13,6 +13,8 @@ description = 'Android SQLite compatibility library'
 
 ext {
     PUBLISH_ARTIFACT_ID = name + "-plangrid"
+    PUBLISH_GROUP_ID = group
+    PUBLISH_VERSION = version
 }
 
 android {
@@ -60,84 +62,8 @@ dependencies {
     androidTestImplementation 'androidx.test.ext:junit:1.1.0'
 }
 
-publish.dependsOn "assembleRelease"
-bintrayUpload.dependsOn "assembleRelease"
-
 ext {
     sqliteDistributionUrl = 'https://sqlite.org/2019/sqlite-amalgamation-3300100.zip'
-    pomXml = {
-        resolveStrategy = DELEGATE_FIRST
-        name project.PUBLISH_ARTIFACT_ID
-        description project.description
-        url 'https://github.com/requery/sqlite-android'
-        scm {
-            url 'https://github.com/requery/sqlite-android.git'
-            connection 'scm:git:git://github.com/requery/sqlite-android.git'
-            developerConnection 'scm:git:git@github.com/requery/sqlite-android.git'
-        }
-        licenses {
-            license {
-                name 'The Apache Software License, Version 2.0'
-                url 'http://www.apache.org/license/LICENSE-2.0.txt'
-                distribution 'repo'
-            }
-        }
-        developers {
-            developer {
-                id 'npurushe'
-                name 'Nikhil Purushe'
-            }
-        }
-    }
-}
-
-android.libraryVariants
-publishing {
-    publications {
-        maven(MavenPublication) {
-            groupId project.group
-            artifactId project.PUBLISH_ARTIFACT_ID
-            version project.version
-            artifact "build/outputs/aar/${project.name}-release.aar"
-            artifact sourcesJar
-            artifact javadocJar
-            pom.withXml {
-                asNode().children().last() + project.pomXml
-                def dependencies = asNode().appendNode('dependencies')
-                configurations.compile.allDependencies.each {
-                    def dependency = dependencies.appendNode('dependency')
-                    dependency.appendNode('groupId', it.group)
-                    dependency.appendNode('artifactId', it.name)
-                    dependency.appendNode('version', it.version)
-                    dependency.appendNode('scope', 'compile')
-                }
-            }
-        }
-    }
-}
-
-Properties properties = new Properties()
-File localProperties = project.rootProject.file('local.properties')
-if (localProperties.exists()) {
-    properties.load(localProperties.newDataInputStream())
-}
-
-bintray {
-    user = properties.getProperty('bintray.user')
-    key = properties.getProperty('bintray.apikey')
-    publications = ['maven']
-    pkg {
-        repo = 'requery'
-        name = 'sqlite-android'
-        userOrg = 'requery'
-        licenses = ['Apache-2.0']
-        vcsUrl = 'https://github.com/requery/sqlite-android.git'
-        version {
-            name = project.version
-            desc = project.description
-            released = new Date()
-        }
-    }
 }
 
 task sourcesJar(type: Jar) {
@@ -171,3 +97,5 @@ task installSqlite(dependsOn: downloadSqlite, type: Copy) {
 }
 
 preBuild.dependsOn installSqlite
+
+apply from: 'android-release-aar.gradle'
